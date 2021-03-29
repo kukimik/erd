@@ -39,7 +39,7 @@ import           Text.Printf                       (HPrintfType, hPrintf,
 import           Text.RawString.QQ
 
 -- | Notation style for relations.
-data Notation = UML | CrowFoot
+data Notation = UML | CrowFoot | Barker
   deriving Show
 
 -- | Config represents all information from command line flags.
@@ -296,6 +296,7 @@ notations :: M.Map String (Maybe Notation)
 notations = M.fromList
   [ ("uml", Just UML)
   , ("crow", Just CrowFoot)
+  , ("barker", Just Barker)
   ]
 
 -- | takeExtension returns the last extension from a file path, or the

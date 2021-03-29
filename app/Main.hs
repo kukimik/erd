@@ -47,6 +47,7 @@ dotER conf er = graph' $ do
   graphAttrs (graphTitle $ title er)
   graphAttrs [ A.RankDir A.FromLeft
              , A.Splines $ unsafeFromConfigOrDefault edgeType
+             , A.Concentrate True
              ]
   nodeAttrs nodeGlobalAttributes
   edgeAttrs [ A.Color [A.toWC $ A.toColor C.Gray50] -- easier to read labels
@@ -65,25 +66,56 @@ dotER conf er = graph' $ do
       entityFmt
         | unsafeFromConfigOrDefault dotentity = toLabel . dotEntity
         | otherwise = toLabel . htmlEntity
-      relToEdge n r = edge (entity1 r) (entity2 r) (label:eAttr n)
+      relToEdge n r = relToEdge' n
         where
           optss = roptions r
-          label = A.Label $ A.HtmlLabel $ H.Text $ withLabelFmt " %s " optss []
+          label = A.Label $ A.HtmlLabel $ H.Text $ withLabelFmt " x%s " optss []
           (c1,c2) = (card1 r, card2 r)
-          eAttr UML = [A.TailLabel $ card2label c1
-                      ,A.HeadLabel $ card2label c2
-                      ]
+          relToEdge' UML =
+            edge
+             (entity1 r)
+             (entity2 r)
+             [label
+             , A.TailLabel $ card2label c1
+             , A.HeadLabel $ card2label c2
+             ]
             where
               card2label = A.HtmlLabel . H.Text . htmlFont optss . L.pack . show
-          eAttr CrowFoot = [A.Dir Both
-                           ,A.ArrowTail $ card2arr c1
-                           ,A.ArrowHead $ card2arr c2
-                           ]
+          relToEdge' CrowFoot =
+            edge
+             (entity1 r)
+             (entity2 r)
+             [label
+             ,A.Dir Both
+             ,A.ArrowTail $ card2arr c1
+             ,A.ArrowHead $ card2arr c2
+             ]
             where
               card2arr ZeroOne  = A.AType [(A.openMod, A.DotArrow), (A.noMods, A.Tee)]
               card2arr One      = A.AType [(A.noMods, A.Tee), (A.noMods, A.Tee)]
               card2arr ZeroPlus = A.AType [(A.noMods, A.Crow), (A.openMod, A.DotArrow)]
               card2arr OnePlus  = A.AType [(A.noMods, A.Crow), (A.noMods, A.Tee)]
+          relToEdge' Barker = do
+            anonSubgraph $ do
+              graphAttrs [A.Concentrate True]
+              edge (entity1 r) (entity2 r)
+                [--label
+                --,A.Dir Both
+                A.Style [A.SItem A.Dashed []]
+               -- ,A.Color
+               --   [A.WC (A.toColor C.Gray50) (Just 0.5)
+               --   ,A.WC (A.toColor C.Transparent ) (Just 0.5)
+               --a   ]
+                ]
+              edge (entity1 r) (entity2 r)
+                [--label
+                --,A.Dir Both
+                A.Style [A.SItem A.Solid []]
+               -- ,A.Color
+               --   [A.WC (A.toColor C.Transparent) (Just 0.5)
+               --   ,A.WC (A.toColor C.Gray ) (Just 0.5)
+               --   ]
+                ]
 
 -- | Converts a single entity to an HTML label.
 htmlEntity :: Entity -> H.Label
