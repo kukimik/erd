@@ -7,6 +7,7 @@ module Erd.Config
   , configIO
   , defaultConfig
   , defaultConfigFile
+  , Notation(..)
   )
 where
 
@@ -37,6 +38,10 @@ import           Text.Printf                       (HPrintfType, hPrintf,
                                                     printf)
 import           Text.RawString.QQ
 
+-- | Notation style for relations.
+data Notation = UML | CrowFoot
+  deriving Show
+
 -- | Config represents all information from command line flags.
 data Config = Config
     { cin         :: (String, Handle)
@@ -46,6 +51,7 @@ data Config = Config
     , configFile  :: Maybe FilePath
     , dotentity   :: Maybe Bool
     , edgePattern :: Maybe A.StyleName
+    , notation    :: Maybe Notation
     }
 
 -- | Represents fields that are stored in the configuration file.
@@ -54,12 +60,13 @@ data ConfigFile = ConfigFile
     , cEdgeType    :: Maybe String
     , cDotEntity   :: Maybe Bool
     , cEdgePattern :: Maybe String
+    , cNotation    :: Maybe String
     }
     deriving Show
 
 -- | A ConfigFile with all fields initialized with Nothing.
 emptyConfigFile :: ConfigFile
-emptyConfigFile = ConfigFile Nothing Nothing Nothing Nothing
+emptyConfigFile = ConfigFile Nothing Nothing Nothing Nothing Nothing
 
 instance FromJSON ConfigFile where
   parseJSON (Y.Object v) =
@@ -67,7 +74,8 @@ instance FromJSON ConfigFile where
     v .:? "output-format" <*>
     v .:? "edge-style" <*>
     v .:? "dot-entity" <*>
-    v .:? "edge-pattern"
+    v .:? "edge-pattern" <*>
+    v .:? "notation"
   parseJSON Y.Null = return emptyConfigFile
   parseJSON _ = fail "Incorrect configuration file."
 
@@ -80,6 +88,7 @@ defaultConfig =
          , configFile = Nothing
          , dotentity = Just False
          , edgePattern = Just A.Dashed
+         , notation = Just UML
          }
 
 defaultConfigFile :: B.ByteString
@@ -88,7 +97,8 @@ defaultConfigFile = B.unlines
    B.append [r|output-format: pdf           # Supported formats: |] (defVals fmts),
    B.append [r|edge-style: spline           # Supported values : |] (defVals edges),
    B.append [r|dot-entity: false            # Supported values : |] (defVals valBool),
-   B.append [r|edge-pattern: dashed         # Supported values : |] (defVals edgePatterns)
+   B.append [r|edge-pattern: dashed         # Supported values : |] (defVals edgePatterns),
+   B.append [r|notation: uml                # Supported values : |] (defVals notations)
   ]
   where
     defVals = B.pack . unwords . M.keys
@@ -195,6 +205,17 @@ opts =
                 )
                 "PATTERN")
       (descriptionWithValuesList "Select one of the edge patterns" edgePatterns)
+  , O.Option "n" ["notation"]
+      (O.ReqArg (\nt cIO -> do
+                    c <- cIO
+                    case toNotation nt of
+                      Nothing -> do
+                        ef "'%s' is not a valid notation style." nt
+                        exitFailure
+                      Just x -> return c {notation = Just x}
+                )
+                "NOTATION")
+      (descriptionWithValuesList "Select one of the notation styles" notations)
   , O.Option "d" ["dot-entity"]
       (O.NoArg (\cIO -> do
                     c <- cIO
@@ -212,7 +233,8 @@ toConfig :: ConfigFile -> Config
 toConfig c = defaultConfig {outfmt      = cFmtOut c >>= toGraphFmt,
                             edgeType    = cEdgeType c >>= toEdgeG,
                             dotentity   = cDotEntity c,
-                            edgePattern = cEdgePattern c >>= toEdgePattern}
+                            edgePattern = cEdgePattern c >>= toEdgePattern,
+                            notation    = cNotation c >>= toNotation}
 
 -- | Reads and parses configuration file at default location: ~/.erd.yaml
 readGlobalConfigFile :: IO (Maybe ConfigFile)
@@ -270,6 +292,12 @@ edgePatterns = M.fromList
   , ("dotted", Just A.Dotted)
   ]
 
+notations :: M.Map String (Maybe Notation)
+notations = M.fromList
+  [ ("uml", Just UML)
+  , ("crow", Just CrowFoot)
+  ]
+
 -- | takeExtension returns the last extension from a file path, or the
 -- empty string if no extension was found. e.g., the extension of
 -- "wat.pdf" is "pdf".
@@ -285,6 +313,9 @@ toEdgeG edge = M.findWithDefault Nothing edge edges
 
 toEdgePattern :: String -> Maybe A.StyleName
 toEdgePattern epat = M.findWithDefault Nothing epat edgePatterns
+
+toNotation :: String -> Maybe Notation
+toNotation nt = M.findWithDefault Nothing nt notations
 
 usageExit :: IO a
 usageExit = usage >> exitFailure
